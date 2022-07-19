@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Document</title>
+</head>
+
+<body>
+
+</body>
+
+</html>
+<script>
+    class MyPromise {
+        constructor(executor) {
+            //初始化Pormise
+            this.initValue()
+            //初始化this，为了保证reslove和reject的this永远指向MyPromise实例
+            this.inintThis()
+            //执行传进来的函数
+            try {
+                executor(this.resolve, this.reject) //实参
+            } catch (e) {
+                this.reject(e) //throw报错
+            }
+        }
+        initValue() {
+            this.status = 'pending'
+            this.result = null
+            //解决定时器情况
+            this.onFulfilledCallbacks = [] //保存成功的回调
+            this.onRejectedCallbacks = [] //保存失败的回调
+        }
+        inintThis() {
+            this.resolve = this.resolve.bind(this)
+            this.reject = this.reject.bind(this)
+        }
+        resolve(val) {
+            //以第一次结果为准
+            if (this.status !== 'pending') return
+            this.status = 'fulfilled'
+            this.result = val
+            while (this.onFulfilledCallbacks.length) {
+                this.onFulfilledCallbacks.shift()(this.result)
+            }
+        }
+        reject(val) {
+            if (this.status !== 'pending') return
+            this.status = 'rejected'
+            this.result = val
+            while (this.onRejectedCallbacks.length) {
+                this.onRejectedCallbacks.shift()(this.result)
+            }
+        }
+        then(onFulfilled, onRejected) {
+            //确保传入的是一个函数
+            onFulfilled = typeof onFulfilled === 'function' ? onFulfilled : onFulfilled => {
+                throw new ReferenceError(`${onFulfilled} is not defind`)
+            }
+            if (onRejected) {
+                onRejected = typeof onRejected === 'function' ? onRejected : onRejectedonFulfilled => {
+                    throw new ReferenceError(`${onFulfilled} is not defind`)
+                }
+            }
+            //实现链式调用
+            let thenPromise = new MyPromise((resolve, reject) => {
+
+                const resolvePromise = cb => {
+                    // 确保onFulfilled和onRejected是异步执行
+                    setTimeout(() => {
+                        try {
+                            //onFulfilled
+                            const x = cb(this.result)
+                            if (x === thenPromise) {
+                                throw new Error('不能返回本身')
+                            }
+                            if (x instanceof MyPromise) {
+                                x.then(resolve, reject)
+                            } else {
+                                resolve(x)
+                            }
+                        } catch (e) {
+                            // 处理报错
+                            reject(e)
+                            throw new Error(e)
+                        }
+                    })
+                }
+                if (this.status === 'fulfilled') {
+                    resolvePromise(onFulfilled)
+                } else if (this.status === 'pending') {
+                    this.onFulfilledCallbacks.push(resolvePromise.bind(this,
+                        onFulfilled))
+                    if (onRejected) {
+                        this.onRejectedCallbacks.push(onRejected.bind(this))
+                    }
+                } else if (this.status === 'rejected') {
+                    onRejected(this.result)
+                }
+            })
+            return thenPromise
+        }
+        catch (onRejected) {
+            onRejected = typeof onRejected === 'function' ? onRejected : onFulfilled => {
+                throw new ReferenceError(`${onRejected} is not defind`)
+            }
+            if (this.status === 'rejected') {
+                onRejected(this.result)
+            } else if (this.status === 'pending') {
+                this.onRejectedCallbacks.push(onRejected.bind(this))
+            }
+        }
+    }
+    let p = new MyPromise((resolve, reject) => {
+        resolve('成功')
+    }).then(res => {
+        return new MyPromise((resolve, reject) => {
+            resolve('第一个then返回promise')
+        })
+    }).then(res => {
+        return `第二个then${res}`
+    })
+
+</script>
