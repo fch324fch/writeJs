@@ -47,6 +47,23 @@
                 this.onFulfilledCallbacks.shift()(this.result)
             }
         }
+        /**
+         * Promise.resolve()
+         * @param {val} 要解析为Promise对象的值
+         */
+        static resolve(val) {
+            //判断参数是否为MyPromise   解决入参数组元素是含有 then 属性的对象或者函数，不会原样返回
+            if (val instanceof MyPromise) {
+                return val
+            } else if (val instanceof Object && 'then' in val) {
+                return new MyPromise((resolve, reject) => {
+                    val.then(resolve, reject)
+                })
+            }
+            return new MyPromise((resolve) => {
+                resolve(val)
+            })
+        }
         reject(val) {
             if (this.status !== 'pending') return
             this.status = 'rejected'
@@ -54,6 +71,15 @@
             while (this.onRejectedCallbacks.length) {
                 this.onRejectedCallbacks.shift()(this.result)
             }
+        }
+        /**
+         * Promise.reject()
+         * @param {val} 要解析为Promise对象的值
+         */
+        static reject(val) {
+            return new MyPromise((resolve, reject) => {
+                reject(val)
+            })
         }
         then(onFulfilled, onRejected) {
             //确保传入的是一个函数
@@ -138,27 +164,50 @@
                         return resolve(iterable)
                     }
                     iterable.forEach((item, index) => {
-                        //判断参数是否为MyPromise
-                        if (item instanceof MyPromise) {
-                            MyPromise.resolve(item).then(res => {
-                                count++
-                                result[index] = item
-                                //等待所有都完成
-                                count === item.length && resolve(result)
-                            }).catch(err => {
-                                //失败直接返回，无需等待
-                                reject(err)
-                            })
-                        } else {
-                            //参数非MyPromise对象，原样返回
+                        MyPromise.resolve(item).then(res => {
                             count++
-                            result[index] = item
+                            result[index] = res
+                            //等待所有都完成
                             count === item.length && resolve(result)
-                        }
+                        }, err => {
+                            reject(err)
+                        })
                     })
                 })
             } else {
-                return new TypeError(`${iterable} is not iterable`)
+                throw new TypeError(`${iterable} is not iterable`)
+            }
+        }
+        /**
+         * @param {iterable} 一个promise的iterable类型
+         * @return Promise对象
+         */
+        static allSettled(iterable) {
+            if (Array.isArray(iterable)) {
+                return new MyPromise((resolve, reject) => {
+                    let result = []
+                    let count = 0
+                    if (iterable.length === 0) return resolve(iterable)
+                    iterable.forEach((item, index) => {
+                        MyPromise.resolve(item).then(res => {
+                            count++
+                            result[index] = {
+                                status: 'fulfilled',
+                                value: res
+                            }
+                            count === iterable.length && resolve(result)
+                        }, err => {
+                            count++
+                            result[index] = {
+                                status: 'rejected',
+                                value: err
+                            }
+                            count === iterable.length && resolve(result)
+                        })
+                    })
+                })
+            } else {
+                throw new TypeError(`${iterable} is not iterable`)
             }
         }
     }
